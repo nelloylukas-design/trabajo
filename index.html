@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora Taller - Comederos</title>
+<style>
+    /* Estilos optimizados para móvil y escritorio */
+    body { font-family: Helvetica, Arial, sans-serif; padding: 15px; background-color: #f4f4f4; margin: 0; color: #333; }
+    
+    .calculadora { 
+        background: white; 
+        padding: 20px; 
+        border-radius: 12px; 
+        max-width: 600px; 
+        margin: 0 auto; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+    }
+
+    h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 15px; margin-top: 0; text-align: center; }
+    
+    label { display: block; margin-top: 20px; font-weight: bold; color: #555; }
+    
+    select, input { 
+        width: 100%; 
+        padding: 14px; 
+        margin-top: 8px; 
+        border: 1px solid #bdc3c7; 
+        border-radius: 8px; 
+        box-sizing: border-box; 
+        font-size: 16px; 
+        background-color: #fff;
+    }
+
+    button { 
+        width: 100%;
+        padding: 16px;
+        margin-top: 25px; 
+        background-color: #27ae60; 
+        color: white; 
+        font-weight: bold; 
+        font-size: 18px;
+        cursor: pointer; 
+        border: none; 
+        border-radius: 8px;
+        box-shadow: 0 4px 0 #219150;
+        transition: transform 0.1s;
+    }
+    button:active { transform: translateY(4px); box-shadow: none; }
+
+    .resultado { margin-top: 30px; display: none; }
+    
+    .bloque-material { 
+        background-color: white; 
+        padding: 0; 
+        border-radius: 10px; 
+        border: 1px solid #e0e0e0;
+        margin-bottom: 25px; 
+        overflow: hidden;
+    }
+
+    .encabezado-material {
+        padding: 15px;
+        color: white;
+        font-weight: bold;
+        font-size: 1.1em;
+    }
+    /* Colores para diferenciar materiales visualmente */
+    .bg-angulo { background-color: #e67e22; }
+    .bg-varilla { background-color: #8e44ad; }
+    .bg-solera { background-color: #2980b9; }
+
+    .cuerpo-material { padding: 15px; }
+
+    .resumen-compra { 
+        font-size: 1.1em; 
+        font-weight: bold; 
+        color: #333; 
+        margin-bottom: 15px; 
+        padding-bottom: 10px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .tramo-individual { 
+        background-color: #f9f9f9;
+        margin-bottom: 10px; 
+        padding: 10px; 
+        border-left: 4px solid #ccc;
+        border-radius: 4px;
+        font-size: 0.95em;
+    }
+    .sobrante { 
+        color: #c0392b; 
+        font-weight: bold; 
+        display: block; 
+        margin-top: 4px; 
+        font-size: 0.9em;
+    }
+</style>
+</head>
+<body>
+
+<div class="calculadora">
+    <h2>📋 Calculadora de Cortes</h2>
+    
+    <label for="tipo">Modelo a fabricar:</label>
+    <select id="tipo">
+        <option value="2m">Comedero de 2 Metros</option>
+        <option value="3m">Comedero de 3 Metros</option>
+    </select>
+
+    <label for="cantidad">Cantidad de comederos:</label>
+    <input type="number" id="cantidad" value="1" min="1" inputmode="numeric" placeholder="Ej. 5">
+
+    <button onclick="calcularOptimizado()">CALCULAR MATERIAL</button>
+
+    <div id="resultado" class="resultado">
+        </div>
+</div>
+
+<script>
+    // --- CONFIGURACIÓN DE TRAMOS (STOCK) ---
+    const LARGO_TRAMO_ANGULO = 6.0;   // 6 metros
+    const LARGO_TRAMO_VARILLA = 7.5;  // 7.5 metros
+    const LARGO_TRAMO_SOLERA = 6.0;   // 6 metros
+
+    function calcularOptimizado() {
+        var tipo = document.getElementById('tipo').value;
+        var cantidad = parseInt(document.getElementById('cantidad').value) || 0;
+
+        if (cantidad < 1) { alert("Por favor ingresa una cantidad válida."); return; }
+
+        // 1. LISTA DE PIEZAS (Medidas exactas en metros)
+        var piezasAngulo = [];
+        var piezasVarilla = [];
+        var piezasSolera = [];
+
+        for (var i = 0; i < cantidad; i++) {
+            if (tipo === "2m") {
+                // --- ÁNGULO (2m) ---
+                piezasAngulo.push(2.0, 2.0, 0.60, 0.60);
+                
+                // --- VARILLA (2m) ---
+                // Medidas ajustadas: 3.05m y agregadas las de 48cm
+                piezasVarilla.push(3.05, 3.05, 0.60, 0.60, 0.58, 0.48, 0.48);
+
+            } else {
+                // --- ÁNGULO (3m) ---
+                piezasAngulo.push(3.0, 3.0, 0.60, 0.60);
+                
+                // --- VARILLA (3m) ---
+                piezasVarilla.push(4.0, 4.0, 0.60, 0.60, 0.58, 0.48, 0.48);
+            }
+
+            // --- SOLERA ---
+            piezasSolera.push(0.91, 0.91, 0.91, 0.63, 0.63);
+        }
+
+        // 2. OPTIMIZACIÓN
+        var resultadoAngulo = optimizar(piezasAngulo, LARGO_TRAMO_ANGULO);
+        var resultadoVarilla = optimizar(piezasVarilla, LARGO_TRAMO_VARILLA);
+        var resultadoSolera = optimizar(piezasSolera, LARGO_TRAMO_SOLERA);
+
+        // 3. GENERAR HTML
+        var html = "";
+        html += generarHtmlBloque("Ángulo", LARGO_TRAMO_ANGULO, resultadoAngulo, "bg-angulo");
+        html += generarHtmlBloque("Varilla Petrolera", LARGO_TRAMO_VARILLA, resultadoVarilla, "bg-varilla");
+        html += generarHtmlBloque("Solera", LARGO_TRAMO_SOLERA, resultadoSolera, "bg-solera");
+
+        document.getElementById('resultado').innerHTML = html;
+        document.getElementById('resultado').style.display = 'block';
+    }
+
+    // --- ALGORITMO: Best Fit Decreasing ---
+    function optimizar(listaPiezas, largoTramo) {
+        listaPiezas.sort(function(a, b) { return b - a; });
+
+        var tramos = []; 
+
+        listaPiezas.forEach(function(pieza) {
+            var tramoEncontrado = false;
+            
+            for (var j = 0; j < tramos.length; j++) {
+                if (tramos[j].espacioLibre >= (pieza - 0.0001)) {
+                    tramos[j].cortes.push(pieza);
+                    tramos[j].espacioLibre -= pieza;
+                    tramoEncontrado = true;
+                    break;
+                }
+            }
+
+            if (!tramoEncontrado) {
+                if (pieza > largoTramo) {
+                    alert("¡Error! Una pieza de " + pieza + "m es más larga que el tramo de " + largoTramo + "m");
+                }
+                tramos.push({
+                    espacioLibre: largoTramo - pieza,
+                    cortes: [pieza]
+                });
+            }
+        });
+        return tramos;
+    }
+
+    // --- RENDERIZADO HTML ---
+    function generarHtmlBloque(nombre, largoStock, datosTramos, claseColor) {
+        var htmlDetalle = "";
+
+        datosTramos.forEach(function(tramo, index) {
+            var cortesString = tramo.cortes.join("m + ") + "m";
+            var desperdicio = Math.abs(tramo.espacioLibre).toFixed(2);
+            
+            htmlDetalle += '<div class="tramo-individual">';
+            // AQUI ESTÁ EL CAMBIO SOLICITADO:
+            htmlDetalle += '<strong>Tramo ' + (index + 1) + ':</strong> ' + cortesString;
+            htmlDetalle += ' <span class="sobrante">Sobra: ' + desperdicio + 'm</span>';
+            htmlDetalle += '</div>';
+        });
+
+        return `
+        <div class="bloque-material">
+            <div class="encabezado-material ${claseColor}">
+                ${nombre} <span style="font-size:0.8em; opacity:0.9;">(Tramos de ${largoStock}m)</span>
+            </div>
+            <div class="cuerpo-material">
+                <div class="resumen-compra">
+                    🛒 Comprar: ${datosTramos.length} tramos
+                </div>
+                <div class="detalle-tramos">
+                    ${htmlDetalle}
+                </div>
+            </div>
+        </div>`;
+    }
+</script>
+
+</body>
+</html>
