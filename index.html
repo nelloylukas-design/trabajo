@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora de Materiales y Cortes</title>
+<style>
+    /* Estilo visual limpio (basado en la primera versión) */
+    body { font-family: Helvetica, Arial, sans-serif; padding: 15px; background-color: #f4f4f4; margin: 0; }
+    
+    .calculadora { 
+        background: white; 
+        padding: 20px; 
+        border-radius: 8px; 
+        max-width: 600px; 
+        margin: 0 auto; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+    }
+
+    h2 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-top: 0; }
+    h3 { color: #007bff; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+
+    label { display: block; margin-top: 15px; font-weight: bold; color: #555; }
+    
+    /* Inputs y botones grandes para dedos en celular */
+    select, input, button { 
+        width: 100%; 
+        padding: 12px; 
+        margin-top: 5px; 
+        border: 1px solid #ccc; 
+        border-radius: 6px; 
+        box-sizing: border-box; 
+        font-size: 16px; /* Tamaño ideal para lectura móvil */
+    }
+
+    button { background-color: #28a745; color: white; font-weight: bold; cursor: pointer; margin-top: 20px; border: none; }
+    button:hover { background-color: #218838; }
+
+    .resultado { margin-top: 25px; display: none; }
+    
+    .bloque-material { 
+        background-color: #f8f9fa; 
+        padding: 15px; 
+        border-radius: 6px; 
+        border-left: 5px solid #007bff; 
+        margin-bottom: 20px; 
+    }
+
+    .resumen-compra { font-size: 1.1em; font-weight: bold; color: #333; margin-bottom: 10px; }
+    
+    .detalle-tramos { font-size: 0.9em; color: #444; }
+    .tramo-individual { 
+        margin-bottom: 8px; 
+        padding-bottom: 8px; 
+        border-bottom: 1px dashed #ccc; 
+    }
+    .sobrante { color: #dc3545; font-weight: bold; font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<div class="calculadora">
+    <h2>Calculadora de Producción</h2>
+    
+    <label for="tipo">Selecciona modelo:</label>
+    <select id="tipo">
+        <option value="2m">Comedero de 2 Metros</option>
+        <option value="3m">Comedero de 3 Metros</option>
+    </select>
+
+    <label for="cantidad">Cantidad a fabricar:</label>
+    <input type="number" id="cantidad" value="1" min="1" inputmode="numeric">
+
+    <button onclick="calcularOptimizado()">CALCULAR TRAMOS</button>
+
+    <div id="resultado" class="resultado">
+        </div>
+</div>
+
+<script>
+    // --- CONFIGURACIÓN DE TRAMOS (STOCK) ---
+    const LARGO_TRAMO_ANGULO = 6.0;  // 6 metros
+    const LARGO_TRAMO_VARILLA = 7.5; // 7.5 metros
+    const LARGO_TRAMO_SOLERA = 6.0;  // 6 metros
+
+    function calcularOptimizado() {
+        var tipo = document.getElementById('tipo').value;
+        var cantidad = parseInt(document.getElementById('cantidad').value) || 0;
+
+        if (cantidad < 1) { alert("Por favor ingresa una cantidad válida."); return; }
+
+        // 1. Generar la lista de TODAS las piezas necesarias
+        var piezasAngulo = [];
+        var piezasVarilla = [];
+        var piezasSolera = [];
+
+        for (var i = 0; i < cantidad; i++) {
+            if (tipo === "2m") {
+                // Angulo (2m)
+                piezasAngulo.push(2.0, 2.0, 0.60, 0.60);
+                // Varilla (2m)
+                piezasVarilla.push(3.0, 3.0, 0.60, 0.60, 0.58);
+            } else {
+                // Angulo (3m)
+                piezasAngulo.push(3.0, 3.0, 0.60, 0.60);
+                // Varilla (3m)
+                piezasVarilla.push(4.0, 4.0, 0.60, 0.60, 0.58);
+            }
+            // Solera (Igual para ambos)
+            piezasSolera.push(0.91, 0.91, 0.91, 0.63, 0.63);
+        }
+
+        // 2. Procesar optimización (Bin Packing)
+        var resultadoAngulo = optimizar(piezasAngulo, LARGO_TRAMO_ANGULO);
+        var resultadoVarilla = optimizar(piezasVarilla, LARGO_TRAMO_VARILLA);
+        var resultadoSolera = optimizar(piezasSolera, LARGO_TRAMO_SOLERA);
+
+        // 3. Generar HTML
+        var html = "";
+        html += generarHtmlBloque("Ángulo", LARGO_TRAMO_ANGULO, resultadoAngulo);
+        html += generarHtmlBloque("Varilla Petrolera", LARGO_TRAMO_VARILLA, resultadoVarilla);
+        html += generarHtmlBloque("Solera", LARGO_TRAMO_SOLERA, resultadoSolera);
+
+        document.getElementById('resultado').innerHTML = html;
+        document.getElementById('resultado').style.display = 'block';
+    }
+
+    // --- ALGORITMO: Acomodar piezas en tramos ---
+    function optimizar(listaPiezas, largoTramo) {
+        // Ordenar de mayor a menor (Estrategia Best Fit Decreasing)
+        listaPiezas.sort(function(a, b) { return b - a; });
+
+        var tramos = []; // Array de objetos {espacioLibre, cortes: []}
+
+        listaPiezas.forEach(function(pieza) {
+            var tramoEncontrado = false;
+            
+            // Buscar si cabe en un tramo ya empezado
+            for (var j = 0; j < tramos.length; j++) {
+                if (tramos[j].espacioLibre >= pieza) {
+                    tramos[j].cortes.push(pieza);
+                    tramos[j].espacioLibre -= pieza;
+                    tramoEncontrado = true;
+                    break;
+                }
+            }
+
+            // Si no cabe, abrir tramo nuevo
+            if (!tramoEncontrado) {
+                tramos.push({
+                    espacioLibre: largoTramo - pieza,
+                    cortes: [pieza]
+                });
+            }
+        });
+        return tramos;
+    }
+
+    // --- GENERADOR DE VISUALIZACIÓN ---
+    function generarHtmlBloque(nombre, largoStock, datosTramos) {
+        var totalMetrosUsados = 0;
+        var htmlDetalle = "";
+
+        datosTramos.forEach(function(tramo, index) {
+            var cortesString = tramo.cortes.join("m + ") + "m";
+            var desperdicio = tramo.espacioLibre.toFixed(2);
+            
+            htmlDetalle += '<div class="tramo-individual">';
+            htmlDetalle += '<strong>Tramo ' + (index + 1) + ':</strong> ' + cortesString;
+            htmlDetalle += ' <span class="sobrante">(Sobra: ' + desperdicio + 'm)</span>';
+            htmlDetalle += '</div>';
+        });
+
+        return `
+        <div class="bloque-material">
+            <h3>${nombre}</h3>
+            <div class="resumen-compra">
+                🛒 Comprar: ${datosTramos.length} tramos de ${largoStock}m
+            </div>
+            <div class="detalle-tramos">
+                ${htmlDetalle}
+            </div>
+        </div>`;
+    }
+</script>
+
+</body>
+</html>
